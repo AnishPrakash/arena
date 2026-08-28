@@ -19,7 +19,7 @@ const (
 // UserProblemStat is one participant's best state on one problem.
 type UserProblemStat struct {
 	Solved       bool
-	Attempts     int   // rejected attempts before the accepted one
+	Attempts     int // rejected attempts before the accepted one
 	BestCPUms    int64
 	BestMemKB    int64
 	Instructions int64

@@ -7,10 +7,10 @@ import "time"
 //
 // Design rule: a JobSpec is SELF-CONTAINED and IMMUTABLE. The runner never queries the
 // database to find out what to do. Two consequences:
-//   1. Runner nodes need no database credentials, so a sandbox escape lands somewhere
-//      that cannot reach participant data.
-//   2. Re-running an archived JobSpec reproduces the original verdict exactly, because
-//      the image digest, testdata version and limits are all pinned in the message.
+//  1. Runner nodes need no database credentials, so a sandbox escape lands somewhere
+//     that cannot reach participant data.
+//  2. Re-running an archived JobSpec reproduces the original verdict exactly, because
+//     the image digest, testdata version and limits are all pinned in the message.
 type JobSpec struct {
 	SubmissionID string `json:"submission_id"`
 	Attempt      int    `json:"attempt"` // 1-based; incremented on redelivery
@@ -106,8 +106,8 @@ type TestResult struct {
 	MemKB     int64   `json:"mem_kb"`
 	ExitCode  int     `json:"exit_code"`
 	Signal    int     `json:"signal"`
-	Message   string  `json:"message,omitempty"` // checker diagnostic, e.g. "line 3: expected 42 got 41"
-	Skipped   bool    `json:"skipped,omitempty"` // early exit
+	Message   string  `json:"message,omitempty"`    // checker diagnostic, e.g. "line 3: expected 42 got 41"
+	Skipped   bool    `json:"skipped,omitempty"`    // early exit
 	SampleOut string  `json:"sample_out,omitempty"` // ONLY populated for IsSample tests
 }
 
@@ -118,9 +118,9 @@ type SubmissionResult struct {
 	RunnerID     string       `json:"runner_id"`
 	Verdict      Verdict      `json:"verdict"`
 	Status       Status       `json:"status"`
-	CPUms        int64        `json:"cpu_ms"`  // max across tests — the algorithm's cost
+	CPUms        int64        `json:"cpu_ms"` // max across tests — the algorithm's cost
 	WallMs       int64        `json:"wall_ms"`
-	MemKB        int64        `json:"mem_kb"`  // max across tests
+	MemKB        int64        `json:"mem_kb"` // max across tests
 	Instructions int64        `json:"instructions,omitempty"`
 	Score        int          `json:"score"`
 	FailedTest   int          `json:"failed_test"` // -1 when accepted
@@ -140,7 +140,12 @@ type SubmissionResult struct {
 func ClassifyRun(out ExecOutcome, lim Limits, outputCorrect bool) Verdict {
 	// 1. Output flood first. SIGXFSZ also makes the process die on a signal, which would
 	//    otherwise be misreported as RE.
-	if out.FSizeKill || (lim.StdoutKB > 0 && out.StdoutLen > lim.StdoutKB*1024) {
+	// >= not >: RLIMIT_FSIZE caps the file exactly AT the limit, so it can never exceed
+	// it and a strict > is unreachable. This matters because CPython sets SIGXFSZ to
+	// SIG_IGN at startup in order to raise OSError instead, so a Python output flood
+	// arrives here with FSizeKill false and StdoutLen exactly equal to the cap. C++ has no
+	// such handler and does die on signal 25.
+	if out.FSizeKill || (lim.StdoutKB > 0 && out.StdoutLen >= lim.StdoutKB*1024) {
 		return VerdictOLE
 	}
 

@@ -74,6 +74,14 @@ func TestClassifyRun(t *testing.T) {
 			ok:   true, want: VerdictOLE,
 		},
 		{
+			// The REAL shape of a Python output flood: CPython ignores SIGXFSZ so it can
+			// raise OSError, and RLIMIT_FSIZE truncates the file to exactly the cap. A
+			// strict > comparison reports RE here, which is wrong.
+			name: "stdout exactly at the cap, python-style (no SIGXFSZ)",
+			out:  ExecOutcome{ExitCode: 1, StdoutLen: 64 * 1024, CPUms: 30},
+			ok:   false, want: VerdictOLE,
+		},
+		{
 			name: "segfault",
 			out:  ExecOutcome{Signal: 11, ExitCode: 139, CPUms: 5},
 			ok:   false, want: VerdictRE,

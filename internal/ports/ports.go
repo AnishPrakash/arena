@@ -92,12 +92,14 @@ type Store interface {
 	SaveResult(ctx context.Context, r core.SubmissionResult) error
 	ListSubmissions(ctx context.Context, f SubmissionFilter) ([]Submission, error)
 	StuckSubmissions(ctx context.Context, olderThan time.Duration, limit int) ([]Submission, error)
+	BumpAttempt(ctx context.Context, id string) (int, error)
 
 	// Catalogue
 	GetProblem(ctx context.Context, id string) (Problem, error)
 	GetProblemBySlug(ctx context.Context, contestSlug, slug string) (Problem, error)
 	ListProblems(ctx context.Context, contestID string) ([]Problem, error)
 	GetContestBySlug(ctx context.Context, slug string) (Contest, error)
+	GetContest(ctx context.Context, id string) (Contest, error)
 	ListTestCases(ctx context.Context, problemID string) ([]core.TestRef, error)
 
 	// Identity
@@ -200,29 +202,29 @@ type Problem struct {
 }
 
 type Submission struct {
-	ID              string       `json:"id"`
-	UserID          string       `json:"user_id"`
-	Handle          string       `json:"handle,omitempty"`
-	ProblemID       string       `json:"problem_id"`
-	ContestID       string       `json:"contest_id"`
-	Language        string       `json:"language"`
-	SourceRef       string       `json:"-"`
-	SourceHash      string       `json:"source_hash"`
-	Status          core.Status  `json:"status"`
-	Verdict         core.Verdict `json:"verdict,omitempty"`
-	CPUms           int64        `json:"cpu_ms"`
-	WallMs          int64        `json:"wall_ms"`
-	MemKB           int64        `json:"mem_kb"`
-	Score           int          `json:"score"`
-	FailedTest      int          `json:"failed_test"`
-	CompileLog      string       `json:"compile_log,omitempty"`
-	Attempt         int          `json:"attempt"`
-	RunnerID        string       `json:"runner_id,omitempty"`
-	ImageDigest     string       `json:"image_digest,omitempty"`
-	TestdataVersion string       `json:"testdata_version,omitempty"`
-	IdempotencyKey  string       `json:"-"`
-	CreatedAt       time.Time    `json:"created_at"`
-	JudgedAt        *time.Time   `json:"judged_at,omitempty"`
+	ID              string            `json:"id"`
+	UserID          string            `json:"user_id"`
+	Handle          string            `json:"handle,omitempty"`
+	ProblemID       string            `json:"problem_id"`
+	ContestID       string            `json:"contest_id"`
+	Language        string            `json:"language"`
+	SourceRef       string            `json:"-"`
+	SourceHash      string            `json:"source_hash"`
+	Status          core.Status       `json:"status"`
+	Verdict         core.Verdict      `json:"verdict,omitempty"`
+	CPUms           int64             `json:"cpu_ms"`
+	WallMs          int64             `json:"wall_ms"`
+	MemKB           int64             `json:"mem_kb"`
+	Score           int               `json:"score"`
+	FailedTest      int               `json:"failed_test"`
+	CompileLog      string            `json:"compile_log,omitempty"`
+	Attempt         int               `json:"attempt"`
+	RunnerID        string            `json:"runner_id,omitempty"`
+	ImageDigest     string            `json:"image_digest,omitempty"`
+	TestdataVersion string            `json:"testdata_version,omitempty"`
+	IdempotencyKey  string            `json:"-"`
+	CreatedAt       time.Time         `json:"created_at"`
+	JudgedAt        *time.Time        `json:"judged_at,omitempty"`
 	Tests           []core.TestResult `json:"tests,omitempty"`
 }
 

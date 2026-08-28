@@ -150,6 +150,21 @@ func (s *Store) GetContestBySlug(ctx context.Context, slug string) (ports.Contes
 	return c, err
 }
 
+// GetContest looks a contest up by id. The verdict path already knows the problem's
+// contest_id, so this avoids a slug round-trip on every accepted submission.
+func (s *Store) GetContest(ctx context.Context, id string) (ports.Contest, error) {
+	var c ports.Contest
+	var mode string
+	err := s.pool.QueryRow(ctx,
+		`SELECT id, slug, title, starts_at, ends_at, scoring_mode FROM contests WHERE id = $1`,
+		id).Scan(&c.ID, &c.Slug, &c.Title, &c.StartsAt, &c.EndsAt, &mode)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return c, ErrNotFound
+	}
+	c.ScoringMode = core.ScoreMode(mode)
+	return c, err
+}
+
 func (s *Store) ListTestCases(ctx context.Context, problemID string) ([]core.TestRef, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT idx, input_ref, output_ref, is_sample, points
@@ -360,6 +375,19 @@ func (s *Store) StuckSubmissions(ctx context.Context, olderThan time.Duration, l
 		out = append(out, x)
 	}
 	return out, rows.Err()
+}
+
+// BumpAttempt atomically increments and returns the attempt counter.
+//
+// The reconciler MUST persist this. Publishing with attempt+1 while leaving the column
+// untouched makes the max-attempts guard unreachable, so a submission whose queue message
+// was lost is re-enqueued forever and the backlog grows without bound.
+func (s *Store) BumpAttempt(ctx context.Context, id string) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx,
+		`UPDATE submissions SET attempt = attempt + 1 WHERE id = $1 RETURNING attempt`,
+		id).Scan(&n)
+	return n, err
 }
 
 // ------------------------------------------------------------------ verdict cache

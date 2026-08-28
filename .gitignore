@@ -1,0 +1,16 @@
+bin/
+dist/
+*.exe
+*.test
+*.out
+.env
+.env.local
+/var/
+arena-boxes/
+arena-blobs/
+node_modules/
+.DS_Store
+.idea/
+.vscode/
+coverage.*
+__debug_bin*

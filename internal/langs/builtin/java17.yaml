@@ -1,0 +1,17 @@
+# file: languages/java17.yaml      (optional — enable only if you have time)
+id: java17
+display: "Java 17 (OpenJDK)"
+image: arena/java17:local
+source_file: Main.java
+compile: ["javac", "-encoding", "UTF-8", "-d", "/box", "/box/Main.java"]
+run: ["java", "-XX:+UseSerialGC", "-Xss64m", "-Xms64m", "-cp", "/box", "Main"]
+time_multiplier: 2.5
+memory_overhead_mb: 128
+compile_limits:
+  cpu_ms: 20000
+  wall_ms: 40000
+  mem_mb: 1024
+  stdout_kb: 128
+  pids: 256
+env: ["LANG=C.UTF-8", "TZ=UTC"]
+enabled: false

@@ -1,0 +1,13 @@
+# file: languages/python312.yaml
+id: python312
+display: "Python 3.12 (CPython)"
+image: arena/python312:local
+source_file: main.py
+run: ["python3", "-I", "-S", "-B", "/box/main.py"]
+# -I isolated mode (ignores env and user site-packages), -S skips site, -B no .pyc writes.
+# Together they remove three sources of non-determinism and stop the interpreter writing
+# into the read-only rootfs.
+time_multiplier: 4.0
+memory_overhead_mb: 32
+env: ["PYTHONHASHSEED=0", "PYTHONDONTWRITEBYTECODE=1", "LANG=C.UTF-8", "TZ=UTC"]
+enabled: true

@@ -27,13 +27,19 @@ import (
 // creation. If profiling ever shows it matters, swap in the SDK behind this same
 // ports.Sandbox interface — no caller changes.
 type Docker struct {
+	// RunnerID labels every container this runner creates, so SweepStale can remove its
+	// own orphans without touching containers belonging to another runner on the same host.
+	RunnerID string
+
 	warmMu sync.Mutex
 	warm   map[string]string // poolKey -> pre-created container name
 	seq    uint64
 	seqMu  sync.Mutex
 }
 
-func NewDocker() *Docker { return &Docker{warm: map[string]string{}} }
+func NewDocker(runnerID string) *Docker {
+	return &Docker{RunnerID: runnerID, warm: map[string]string{}}
+}
 
 func (d *Docker) next() uint64 {
 	d.seqMu.Lock()
@@ -86,6 +92,7 @@ func (d *Docker) Run(ctx context.Context, spec ports.RunSpec) (core.ExecOutcome,
 
 	args := []string{
 		"run", "--name", name,
+		"--label", "arena.runner=" + d.RunnerID,
 		"--workdir", "/box",
 		"-v", spec.BoxDir + ":/box:rw",
 
@@ -124,6 +131,11 @@ func (d *Docker) Run(ctx context.Context, spec ports.RunSpec) (core.ExecOutcome,
 	}
 	args = append(args, spec.Image)
 	args = append(args, boxCmd...)
+
+	// A runner killed mid-judge leaves its container behind, and names are deterministic,
+	// so the retry would collide with "container name is already in use" (exit 125) and
+	// burn every attempt. Clear the name first; this is a no-op in the normal case.
+	d.remove(name)
 
 	runCtx, cancel := context.WithTimeout(ctx, outerDeadline)
 	defer cancel()
@@ -239,9 +251,36 @@ func (d *Docker) remove(name string) {
 // to ~50 ms. It is written up in DECISIONS.md as the next optimisation; the pre-pull below
 // captures most of the benefit for a fraction of the complexity.
 func (d *Docker) Warm(ctx context.Context, image string, _ int) error {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	// Already present locally? Nothing to pull. Locally-built tags (arena/*:local) have no
+	// registry behind them, so an unconditional pull fails on every runner start and
+	// makes a healthy system look broken in the logs.
+	if exec.CommandContext(ctx, "docker", "image", "inspect", image).Run() == nil {
+		return nil
+	}
+	pullCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-	return exec.CommandContext(ctx, "docker", "pull", image).Run()
+	return exec.CommandContext(pullCtx, "docker", "pull", image).Run()
+}
+
+// SweepStale removes containers left behind by a previous incarnation of THIS runner —
+// the ones a SIGKILL prevented it from cleaning up. Scoped by label so a co-located
+// runner's live containers are never touched.
+//
+// Without this, an orphan keeps consuming CPU on a pinned core and holds a container name
+// the retry needs.
+func (d *Docker) SweepStale(ctx context.Context) (int, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "docker", "ps", "-aq",
+		"--filter", "label=arena.runner="+d.RunnerID).Output()
+	if err != nil {
+		return 0, err
+	}
+	ids := strings.Fields(string(out))
+	for _, id := range ids {
+		_ = exec.CommandContext(ctx, "docker", "rm", "-f", "-v", id).Run()
+	}
+	return len(ids), nil
 }
 
 func (d *Docker) Close() error { return nil }

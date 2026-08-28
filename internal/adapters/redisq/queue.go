@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -94,6 +95,16 @@ func (q *Queue) Consume(ctx context.Context, consumer string, n int, block time.
 		return nil, nil // block expired with nothing available; not an error
 	}
 	if err != nil {
+		// NOGROUP means the stream or consumer group vanished underneath us — a Redis
+		// restart without persistence, a failover to an empty replica, or an operator
+		// FLUSHDB. Recreate it and let the caller retry, rather than spinning on the
+		// same error until someone notices. Losing the group is survivable: unacked
+		// work is recovered by the API's reconciler from the durable submissions table.
+		if strings.HasPrefix(err.Error(), "NOGROUP") {
+			if e := q.rdb.XGroupCreateMkStream(ctx, q.stream, q.group, "$").Err(); e == nil {
+				return nil, nil
+			}
+		}
 		return nil, err
 	}
 	return decode(res), nil

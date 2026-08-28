@@ -10,10 +10,10 @@ import (
 // New selects a sandbox backend by name. This one function is the entire cost of swapping
 // isolation technology — the documented upgrade path to gVisor is a new case here plus
 // `--runtime=runsc` in the docker adapter's arg list.
-func New(driver, env string) (ports.Sandbox, error) {
+func New(driver, env, runnerID string) (ports.Sandbox, error) {
 	switch driver {
 	case "docker", "":
-		return NewDocker(), nil
+		return NewDocker(runnerID), nil
 	case "process":
 		if env == "prod" {
 			return nil, fmt.Errorf("sandbox: the process driver provides NO isolation and is forbidden in prod")

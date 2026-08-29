@@ -67,6 +67,11 @@ jobs:
           docker compose -f deploy/docker-compose.yml ps
           exit 1
 
+      - name: Seed the demo contest
+        run: |
+          docker compose -f deploy/docker-compose.yml run --rm seed
+          curl -sf localhost:8080/v1/contests/technovit-speed/problems | jq -e 'length > 0'
+
       - name: Golden judge-the-judge suite
         run: go test ./testdata/golden -tags=golden -v -count=1 -timeout=15m
 

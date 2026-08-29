@@ -1,0 +1,41 @@
+# file: deploy/keda/scaledobject.yaml
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: arena-runner
+  namespace: arena
+spec:
+  scaleTargetRef: { name: arena-runner }
+  minReplicaCount: 1          # one warm runner: contest-start latency matters
+  maxReplicaCount: 40
+  pollingInterval: 5
+  cooldownPeriod: 180         # do not thrash: a scale-down mid-contest wastes warm caches
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0     # react to a burst immediately
+          policies: [{ type: Percent, value: 200, periodSeconds: 30 }]
+        scaleDown:
+          stabilizationWindowSeconds: 300   # come down slowly
+          policies: [{ type: Percent, value: 25, periodSeconds: 60 }]
+  triggers:
+    # THE signal. Never CPU: a judge node is supposed to sit at 100% CPU, so a CPU trigger
+    # either never scales up or never scales down.
+    - type: redis-streams
+      metadata:
+        address: redis.arena.svc.cluster.local:6379
+        stream: judge.jobs
+        consumerGroup: judges
+        pendingEntriesCount: "12"    # ~3 submissions queued per slot before adding a pod
+      authenticationRef: { name: arena-redis-auth }
+
+    # Pre-scale before the contest starts and before it ends. Both spikes are scheduled
+    # events whose timing you already know; warming for them costs cents and removes the
+    # worst latency the participants would otherwise see.
+    - type: cron
+      metadata:
+        timezone: Asia/Kolkata
+        start: "25 17 * * *"     # 17:25 IST — 5 min before an 17:30 contest start
+        end:   "05 20 * * *"     # 20:05 IST — 5 min after the end
+        desiredReplicas: "8"

@@ -1,0 +1,55 @@
+# file: deploy/k8s/10-api.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: arena-api
+  namespace: arena
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: arena-api } }
+  template:
+    metadata:
+      labels: { app: arena-api }
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/AnishPrakash/arena-api:latest
+          ports: [{ containerPort: 8080 }]
+          envFrom:
+            - secretRef: { name: arena-secrets }
+            - configMapRef: { name: arena-config }
+          # The API is I/O bound and small. Request what it needs; limit generously so a
+          # traffic spike is never throttled into a latency problem.
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "1000m", memory: "512Mi" }
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8080 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 15
+          # Give in-flight requests and SSE streams time to finish on a rolling deploy.
+          lifecycle:
+            preStop:
+              exec: { command: ["sleep", "5"] }
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata: { name: arena-api, namespace: arena }
+spec:
+  selector: { app: arena-api }
+  ports: [{ port: 80, targetPort: 8080 }]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: { name: arena-api, namespace: arena }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: arena-api }
+  minReplicas: 2
+  maxReplicas: 12
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 65 } }

@@ -1,0 +1,39 @@
+# file: deploy/k8s/30-config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: arena-config, namespace: arena }
+data:
+  ARENA_ENV: "prod"
+  ARENA_LOG_LEVEL: "info"
+  ARENA_REDIS_ADDR: "redis.arena.svc.cluster.local:6379"
+  ARENA_STREAM: "judge.jobs"
+  ARENA_GROUP: "judges"
+  ARENA_LEASE_TTL: "90s"
+  ARENA_MAX_ATTEMPTS: "3"
+  ARENA_API_BASE: "http://arena-api.arena.svc.cluster.local"
+  ARENA_SANDBOX: "docker"
+  ARENA_BOX_ROOT: "/var/tmp/arena-boxes"
+  ARENA_BLOB_DRIVER: "s3"
+---
+# NetworkPolicy: runners may reach Redis, the API and the blob store. Nothing else — and
+# critically, NOT Postgres and NOT the cloud metadata endpoint.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: runner-egress, namespace: arena }
+spec:
+  podSelector: { matchLabels: { app: arena-runner } }
+  policyTypes: [Egress]
+  egress:
+    - to: [{ podSelector: { matchLabels: { app: redis } } }]
+      ports: [{ port: 6379 }]
+    - to: [{ podSelector: { matchLabels: { app: arena-api } } }]
+      ports: [{ port: 8080 }]
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.169.254/32   # cloud metadata / IAM credentials
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports: [{ port: 443 }]         # object storage only

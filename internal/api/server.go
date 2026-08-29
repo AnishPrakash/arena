@@ -79,6 +79,20 @@ func (s *Server) Router() http.Handler {
 
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
 	r.Get("/readyz", s.handleReady)
+	// A judge opening the bare host should land somewhere meaningful rather than a 404.
+	r.Get("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"service": "arena",
+			"docs":    "https://github.com/AnishPrakash/arena#readme",
+			"links": map[string]string{
+				"health":      "/readyz",
+				"problems":    "/v1/contests/technovit-speed/problems",
+				"leaderboard": "/v1/contests/technovit-speed/leaderboard",
+				"metrics":     "/metrics",
+			},
+		})
+	})
 	r.Handle("/metrics", promhttp.Handler())
 
 	r.Route("/v1", func(r chi.Router) {

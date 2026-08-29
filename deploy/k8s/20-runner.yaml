@@ -1,0 +1,59 @@
+# file: deploy/k8s/20-runner.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: arena-runner
+  namespace: arena
+spec:
+  replicas: 1                 # KEDA owns this number from here on
+  selector: { matchLabels: { app: arena-runner } }
+  template:
+    metadata:
+      labels: { app: arena-runner }
+    spec:
+      # Runners land ONLY on the judge node pool: dedicated CPU, no other workload
+      # competing for cache or cores. This is a determinism control, not a preference.
+      nodeSelector:
+        arena.io/pool: judge
+      tolerations:
+        - key: arena.io/judge
+          operator: Exists
+          effect: NoSchedule
+      # Spread across nodes so losing one spot instance does not halve capacity.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector: { matchLabels: { app: arena-runner } }
+      # Runners hold NO database credentials. A sandbox escape reaches a pod that can talk
+      # to the queue and one authenticated endpoint, and nothing else.
+      automountServiceAccountToken: false
+      containers:
+        - name: runner
+          image: ghcr.io/AnishPrakash/arena-runner:latest
+          env:
+            - name: ARENA_RUNNER_ID
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: ARENA_RUNNER_SLOTS
+              value: "3"
+          envFrom:
+            - secretRef: { name: arena-runner-secrets }   # queue + runner token ONLY
+            - configMapRef: { name: arena-config }
+          # requests == limits puts the pod in the Guaranteed QoS class, which is what
+          # earns it exclusive CPUs under the static CPU manager policy. Burstable pods
+          # get shared cores and non-reproducible timings.
+          resources:
+            requests: { cpu: "4", memory: "4Gi" }
+            limits:   { cpu: "4", memory: "4Gi" }
+          volumeMounts:
+            - { name: dockersock, mountPath: /var/run/docker.sock }
+            - { name: boxes,      mountPath: /var/tmp/arena-boxes }
+      volumes:
+        - name: dockersock
+          hostPath: { path: /var/run/docker.sock, type: Socket }
+        - name: boxes
+          # Node-local scratch. Never a network volume: judging is I/O sensitive and a
+          # shared filesystem would make timings depend on other pods' disk traffic.
+          emptyDir: { sizeLimit: 20Gi }
+      # Long enough for an in-flight submission to finish, or at least be nacked.
+      terminationGracePeriodSeconds: 120

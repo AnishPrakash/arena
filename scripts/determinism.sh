@@ -25,12 +25,21 @@ for i in $(seq 1 "$N"); do
     | curl -s -X POST "$API/v1/problems/$PROB/submissions" \
         -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
         -H "Idempotency-Key: det-$i-$(date +%s%N)" -d @- | jq -r .id)
-  for _ in $(seq 1 60); do
+  for _ in $(seq 1 ${POLL_TICKS:-360}); do
     B=$(curl -s "$API/v1/submissions/$ID" -H "Authorization: Bearer $TOKEN")
     [ "$(echo "$B" | jq -r .status)" = "DONE" ] && break
     sleep 0.5
   done
-  echo "$B" | jq -r .cpu_ms >> /tmp/arena-cpu.txt
+  # A sample that did not reach DONE is a MISSING measurement, not a fast one.
+  # Averaging it in as 0 produced a 139% CV on the first run - noise from timeouts,
+  # not variance from the judge.
+  ST=$(echo "$B" | jq -r .status)
+  CM=$(echo "$B" | jq -r '.cpu_ms // empty')
+  if [ "$ST" = "DONE" ] && [ -n "$CM" ] && [ "$CM" != "null" ]; then
+    echo "$CM" >> /tmp/arena-cpu.txt
+  else
+    echo "  ! sample $i discarded (status=$ST cpu_ms=$CM)" >&2
+  fi
   printf "."
 done
 echo

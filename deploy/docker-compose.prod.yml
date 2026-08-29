@@ -1,11 +1,17 @@
-# Overlay for a public host:
+# Overlay for the public demo host:
 #   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.prod.yml up -d
-#
-# Postgres, Redis, Prometheus and Grafana are reachable only on the compose network.
-# The cloud firewall is the second layer of this, not the only one — an unauthenticated
-# Redis on a public IP is found by scanners within minutes.
 services:
+  # Infrastructure is reachable only on the compose network. The cloud firewall is the
+  # second layer of this, not the only one.
   postgres:   { ports: [] }
   redis:      { ports: [] }
   prometheus: { ports: [] }
   grafana:    { ports: [] }
+
+  # ONE runner on a 2-vCPU host. Core pinning is computed as slot + ARENA_CPUSET_BASE and
+  # is not validated against the host core count, so a second replica asks for core 2 on a
+  # 2-core machine, Docker refuses the container, and submissions fail as IE.
+  # slots <= cores - 1, applied honestly to a 2-core box.
+  runner:
+    deploy:
+      replicas: 1

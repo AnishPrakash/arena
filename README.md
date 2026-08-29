@@ -17,13 +17,13 @@ Built for **GDG VIT Chennai — Cloud & DevOps Round 2, Task 2 (Remote Runtime E
 | **Problems** | <http://34.93.124.207:8080/v1/contests/technovit-speed/problems> |
 | **Leaderboard** | <http://34.93.124.207:8080/v1/contests/technovit-speed/leaderboard> |
 | **Metrics** | <http://34.93.124.207:8080/metrics> |
-| **Demo video** | [5-minute walkthrough](<DRIVE_LINK>) |
+| **Demo video** | [5-minute walkthrough](https://drive.google.com/file/d/1knx3zIm1B9f28S8MNgHsSLOj5Mzvl_xI/view?usp=sharing) |
 | **Login** | `anish` / `password123` |
 
 > The demo instance is a single Google Compute Engine VM served over **plain HTTP** — there
 > is no domain, so there is no certificate. The Caddy TLS overlay
 > (`deploy/docker-compose.prod.yml`) is written and needs only a hostname. The instance runs
-> until **<DATE>**; after that the whole stack is reproducible with `docker compose up` from
+> until **10 September 2026**; after that the whole stack is reproducible with `docker compose up` from
 > a clean clone.
 
 **Status:** phases 0–9 complete. `make smoke` **11/11**, golden judge-the-judge suite

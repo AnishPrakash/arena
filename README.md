@@ -363,6 +363,11 @@ between a load test and a load *measurement*:
 
 A load test that does not fight its own optimisations reports the optimisations.
 
+![Queue depth and API latency during a submission burst](docs/img/grafana-queue.png)
+
+*Queue depth rising and draining while API p50/p95/p99 stay flat — the burst became
+backlog, not dropped requests.*
+
 ---
 
 ## 7. Cost

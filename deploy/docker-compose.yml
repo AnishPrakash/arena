@@ -108,7 +108,10 @@ services:
       ARENA_SANDBOX: docker
       # Slots = dedicated cores. Raising this above the core count destroys timing
       # determinism, which is the property the brief explicitly asks for.
-      ARENA_RUNNER_SLOTS: "2"
+      # Overridable so the determinism experiment can compare pinned vs oversubscribed:
+      #   RUNNER_SLOTS=9  docker compose ... up -d   (1 slot per dedicated core)
+      #   RUNNER_SLOTS=40 docker compose ... up -d   (4x the cores)
+      ARENA_RUNNER_SLOTS: "${RUNNER_SLOTS:-2}"
       ARENA_CPUSET_BASE: "1"
     depends_on:
       api: { condition: service_healthy }

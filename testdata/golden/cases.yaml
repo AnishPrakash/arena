@@ -1,0 +1,134 @@
+# file: testdata/golden/cases.yaml
+#
+# Every entry is a program whose correct verdict is known in advance. The suite is the
+# difference between "I wrote a judge" and "I proved my judge classifies a fork bomb
+# correctly". It is also the video script.
+problem: a-plus-b
+
+cases:
+  # ---------- correctness ----------
+  - name: accepted-python
+    file: ac_simple.py
+    lang: python312
+    expect: AC
+    why: baseline — the happy path must stay fast and green
+
+  - name: accepted-cpp
+    file: ac_fast.cpp
+    lang: cpp20
+    expect: AC
+    why: proves the compile path and the static-link flags work
+
+  - name: wrong-answer
+    file: wa_offbyone.py
+    lang: python312
+    expect: AC_NOT     # any non-AC; the checker decides WA
+    want_verdict: WA
+    why: a program that runs cleanly but computes the wrong thing
+
+  # ---------- resource limits ----------
+  - name: infinite-loop
+    file: tle_busyloop.py
+    lang: python312
+    expect: TLE
+    why: RLIMIT_CPU must fire; catches the case everyone tests
+
+  - name: sleeping-forever
+    file: tle_sleep.py
+    lang: python312
+    expect: TLE
+    why: >
+      burns NO cpu, so RLIMIT_CPU can never fire. Only the wall-clock watchdog catches it.
+      This is the case a single-timeout implementation gets wrong.
+
+
+  - name: single-huge-allocation
+    file: mle_alloc.py
+    lang: python312
+    expect: MLE
+    why: cgroup memory.max fires and the OOM flag must outrank the non-zero exit it causes
+
+  - name: gradual-memory-growth
+    file: mle_growlist.py
+    lang: python312
+    expect: MLE
+    why: >
+      a slow leak rather than one big malloc. With swap enabled this would degrade into a
+      wall-clock timeout instead of a clean MLE — it is the test that proves
+      --memory-swap == --memory.
+
+  - name: divide-by-zero
+    file: re_divzero.py
+    lang: python312
+    expect: RE
+
+  - name: segfault
+    file: re_segfault.cpp
+    lang: cpp20
+    expect: RE
+
+  - name: stack-overflow
+    file: re_deep_recursion.py
+    lang: python312
+    expect_any: [RE, MLE]
+    must_not_be: AC
+    why: >-
+      Unbounded recursion must be contained, but WHICH limit catches it is
+      language-dependent: CPython allocates call frames on the heap, so with a raised
+      recursionlimit it exhausts cgroup memory (MLE) before RLIMIT_STACK ever applies.
+      A compiled language consuming the real C stack would segfault into RE instead.
+      Asserting a single verdict here would be asserting a CPython implementation detail.
+
+  - name: output-flood
+    file: ole_flood.py
+    lang: python312
+    expect: OLE
+    why: RLIMIT_FSIZE — without it this fills the node's disk and the log pipeline
+
+  - name: compile-error
+    file: ce_syntax.cpp
+    lang: cpp20
+    expect: CE
+    why: compiler stderr must reach the participant; program stdout never does
+
+  # ---------- adversarial ----------
+  - name: fork-bomb
+    file: attack_forkbomb.py
+    lang: python312
+    expect_any: [RE, TLE]
+    why: pids-limit contains it; the node must stay responsive
+    must_not_be: AC
+
+  - name: outbound-network
+    file: attack_network.py
+    lang: python312
+    expect_any: [RE, TLE]
+    why: --network none; no exfiltration, no downloading a solution mid-run
+    must_not_be: AC
+
+  - name: read-host-secrets
+    file: attack_readetc.py
+    lang: python312
+    expect_any: [WA, RE]
+    why: nothing outside /box is reachable or useful; must never produce the expected output
+
+  - name: write-to-rootfs
+    file: attack_writeroot.py
+    lang: python312
+    expect_any: [RE, WA]
+    why: read-only rootfs
+
+  - name: fill-the-box
+    file: attack_fillbox.py
+    lang: python312
+    expect_any: [RE, OLE, TLE]
+    why: tmpfs size cap plus RLIMIT_FSIZE; the host disk must not move
+
+  - name: kill-the-supervisor
+    file: attack_killparent.py
+    lang: python312
+    expect_any: [RE, TLE, WA]
+    why: >
+      the program tries to kill PID 1 (boxrun) to escape measurement. It runs as uid 65534
+      with cap-drop=ALL, so it cannot signal a process it does not own, and the container
+      dies with its init anyway.

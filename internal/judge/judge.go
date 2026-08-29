@@ -56,7 +56,12 @@ func (j *Judge) Run(ctx context.Context, job core.JobSpec, slot int) (core.Submi
 	// One box per slot, wiped between submissions. Ephemeral by construction: whatever a
 	// submission leaves behind — files, memory, half-written state — is deleted, which is
 	// why "memory leaks" cannot accumulate across submissions.
-	slotDir := filepath.Join(j.BoxRoot, fmt.Sprintf("slot-%d", slot))
+	// The runner id MUST be in this path. Slot numbers are per-runner, so two runners
+	// sharing a host (compose replicas, or several pods with the same hostPath) would
+	// both resolve slot-0 to the same directory and silently overwrite each other's
+	// source, stdin, stdout and meta.json — producing verdicts attributed to the wrong
+	// submission. That is far worse than a crash, because it looks like a working judge.
+	slotDir := filepath.Join(j.BoxRoot, j.RunnerID, fmt.Sprintf("slot-%d", slot))
 	boxDir := filepath.Join(slotDir, "box")
 	stashDir := filepath.Join(slotDir, "stash")
 	for _, d := range []string{boxDir, stashDir} {
@@ -86,7 +91,7 @@ func (j *Judge) Run(ctx context.Context, job core.JobSpec, slot int) (core.Submi
 			Image: manifest.Image, Cmd: manifest.Compile, BoxDir: boxDir,
 			Limits: job.Limits.Compile, Env: manifest.Env, CPUSet: cpuset,
 			Network: false, DisableASLR: false,
-			Name:    fmt.Sprintf("arena-c-%s", short(job.SubmissionID)),
+			Name: fmt.Sprintf("arena-c-%s", short(job.SubmissionID)),
 		})
 		if err != nil {
 			return res, fmt.Errorf("compile sandbox: %w", err)
@@ -177,7 +182,7 @@ func (j *Judge) runOne(ctx context.Context, job core.JobSpec, m *langs.Manifest,
 		Image: m.Image, Cmd: m.Run, BoxDir: boxDir,
 		StdinPath: "/box/input", Limits: job.Limits.Run, Env: m.Env,
 		CPUSet: cpuset, Network: job.Policy.Network, DisableASLR: job.Policy.DisableASLR,
-		Name:   fmt.Sprintf("arena-r-%s-%d", short(job.SubmissionID), tc.Index),
+		Name: fmt.Sprintf("arena-r-%s-%d", short(job.SubmissionID), tc.Index),
 	})
 	if err != nil {
 		return core.TestResult{}, fmt.Errorf("run sandbox: %w", err)

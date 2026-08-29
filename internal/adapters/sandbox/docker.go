@@ -31,14 +31,12 @@ type Docker struct {
 	// own orphans without touching containers belonging to another runner on the same host.
 	RunnerID string
 
-	warmMu sync.Mutex
-	warm   map[string]string // poolKey -> pre-created container name
-	seq    uint64
-	seqMu  sync.Mutex
+	seq   uint64
+	seqMu sync.Mutex
 }
 
 func NewDocker(runnerID string) *Docker {
-	return &Docker{RunnerID: runnerID, warm: map[string]string{}}
+	return &Docker{RunnerID: runnerID}
 }
 
 func (d *Docker) next() uint64 {

@@ -28,7 +28,9 @@ const maxSourceBytes = 256 * 1024 // 256 KiB: generous for any solution, hostile
 // handleSubmit is the hot path. Its contract is: bounded work, no execution, always fast.
 //
 // Order of operations is chosen so the cheapest rejection happens first:
-//   validate -> rate limit -> idempotency -> catalogue -> store blob -> insert -> enqueue.
+//
+//	validate -> rate limit -> idempotency -> catalogue -> store blob -> insert -> enqueue.
+//
 // Anything that touches Redis or Postgres comes after the checks that need neither.
 func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -118,7 +120,13 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 	// Participants resubmit identical code constantly. If we have already judged this
 	// exact (source, language, image, testdata) tuple, we replay the stored result and
 	// never touch a runner. Typically 15-30% of contest submissions.
-	cacheKey := VerdictCacheKey(srcHash, manifest.ID, manifest.Image, problem.TestdataVersion)
+	limits := core.LimitSet{
+		Compile: manifest.EffectiveCompileLimits(),
+		// Per-language scaling applied HERE, once, so the runner never has to know about
+		// language fairness policy — and so the cache key reflects the real envelope.
+		Run: manifest.ScaleRunLimits(problem.Limits),
+	}
+	cacheKey := VerdictCacheKey(srcHash, manifest.ID, manifest.Image, problem.TestdataVersion, limits)
 	if cached, hit, _ := s.store.CachedVerdict(ctx, cacheKey); hit {
 		obs.CacheHits.Inc()
 		cached.SubmissionID = sub.ID
@@ -145,15 +153,10 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		ImageDigest:     manifest.Image,
 		TestdataVersion: problem.TestdataVersion,
 		Tests:           tests,
-		Limits: core.LimitSet{
-			Compile: manifest.EffectiveCompileLimits(),
-			// Per-language scaling applied HERE, once, so the runner never has to know
-			// about language fairness policy.
-			Run: manifest.ScaleRunLimits(problem.Limits),
-		},
-		Checker:    problem.Checker,
-		Policy:     core.DefaultPolicy(),
-		EnqueuedAt: time.Now(),
+		Limits:          limits,
+		Checker:         problem.Checker,
+		Policy:          core.DefaultPolicy(),
+		EnqueuedAt:      time.Now(),
 	}
 	if err := s.queue.Publish(ctx, job); err != nil {
 		// The row exists but no job does. The reconciler (4.9) re-enqueues it, so we
@@ -166,8 +169,15 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 
 // VerdictCacheKey binds every input that can change a verdict. Change any one of them and
 // the key changes, so the cache invalidates itself with no TTL and no manual purge.
-func VerdictCacheKey(sourceHash, lang, image, testdataVersion string) string {
-	h := sha256.Sum256([]byte(sourceHash + "|" + lang + "|" + image + "|" + testdataVersion))
+//
+// The LIMITS are part of the key, and that is not optional. Without them, raising a
+// problem's time limit — or fixing a platform default, as happened when the compile
+// step's RLIMIT_FSIZE was strangling the linker — leaves every previously cached verdict
+// in place, and the corrected judge is never invoked for code it has seen before.
+func VerdictCacheKey(sourceHash, lang, image, testdataVersion string, lim core.LimitSet) string {
+	limJSON, _ := json.Marshal(lim)
+	h := sha256.Sum256([]byte(sourceHash + "|" + lang + "|" + image + "|" +
+		testdataVersion + "|" + string(limJSON)))
 	return hex.EncodeToString(h[:])
 }
 

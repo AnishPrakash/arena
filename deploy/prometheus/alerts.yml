@@ -1,0 +1,37 @@
+# file: deploy/prometheus/alerts.yml
+groups:
+  - name: arena
+    rules:
+      # The signal that the judging fleet is undersized. This is also exactly the KEDA
+      # scaling trigger, so alert and autoscaler agree on what "behind" means.
+      - alert: QueueBacklogGrowing
+        expr: arena_queue_backlog > 100
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "Judging backlog above 100 for a minute — scale runners up"
+
+      # A spike in Internal Error means WE are broken, not the participants.
+      - alert: InternalErrorRate
+        expr: rate(arena_verdicts_total{verdict="IE"}[5m]) > 0.1
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Judge is producing internal errors"
+
+      # The API must stay fast no matter how backed up judging is. If this fires, the
+      # control/execution plane separation has been violated somewhere.
+      - alert: APILatencyDegraded
+        expr: histogram_quantile(0.95,
+              sum(rate(arena_http_request_duration_seconds_bucket[5m])) by (le)) > 0.5
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "API p95 above 500ms — control plane should be independent of judging load"
+
+      - alert: RunnersDead
+        expr: absent(arena_runner_slots_busy) or sum(arena_runner_slots_busy) == 0
+        for: 3m
+        labels: { severity: critical }
+        annotations:
+          summary: "No runner has reported a busy slot for 3 minutes"

@@ -1,0 +1,8 @@
+# file: deploy/grafana/provisioning/dashboards/dash.yml
+apiVersion: 1
+providers:
+  - name: arena
+    folder: Arena
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

@@ -1,0 +1,24 @@
+# file: deploy/Dockerfile.api
+FROM golang:1.25-alpine AS build
+WORKDIR /src
+# Copy the manifests first so `go mod download` is cached independently of source changes.
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN mkdir -p internal/langs/builtin && cp languages/*.yaml internal/langs/builtin/
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" -o /out/api  ./cmd/api && \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" -o /out/seed ./cmd/seed
+
+# distroless: no shell, no package manager, ~2 MB base. Nothing to pivot to if the API is
+# ever compromised, and it pulls in seconds when the deployment scales out.
+# Alpine rather than distroless: the compose healthcheck shells out to wget, and
+# distroless has no shell and no wget, so the API would never report healthy and every
+# service gated on service_healthy would wait forever. ~8MB instead of ~2MB, and the
+# attack surface is still tiny.
+FROM alpine:3.19
+RUN apk add --no-cache wget ca-certificates && adduser -D -u 65532 nonroot
+COPY --from=build /out/api  /app/api
+COPY --from=build /out/seed /app/seed
+USER nonroot:nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/api"]

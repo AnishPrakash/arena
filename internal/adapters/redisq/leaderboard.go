@@ -4,6 +4,7 @@ package redisq
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -126,7 +127,9 @@ func (l *Leaderboard) Top(ctx context.Context, contestID string, n int) ([]ports
 			Rank:   int64(i + 1),
 			UserID: uid,
 			Score:  z.Score,
-			Solved: int(z.Score / zsetScale),
+			// score = solved*1e9 - penalty with 0 <= penalty < 1e9, so a plain
+			// division floors 999_999_979 (one problem solved, 21ms penalty) to 0.
+			Solved: int(math.Ceil(z.Score / zsetScale)),
 		})
 	}
 	return out, nil

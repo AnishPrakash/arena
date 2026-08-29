@@ -93,13 +93,20 @@ func (s *Server) afterVerdict(ctx context.Context, sub ports.Submission,
 
 	// 1. Populate the verdict cache for future identical submissions.
 	if res.Verdict != core.VerdictIE {
-		key := VerdictCacheKey(sub.SourceHash, sub.Language, res.ImageDigest, problem.TestdataVersion)
-		if res.ImageDigest == "" {
-			if m, ok := s.langs.Get(sub.Language); ok {
-				key = VerdictCacheKey(sub.SourceHash, sub.Language, m.Image, problem.TestdataVersion)
+		if m, ok := s.langs.Get(sub.Language); ok {
+			img := res.ImageDigest
+			if img == "" {
+				img = m.Image
 			}
+			// Must mirror handleSubmit exactly, limits included, or writes and reads use
+			// different keys and the cache silently never hits.
+			key := VerdictCacheKey(sub.SourceHash, sub.Language, img, problem.TestdataVersion,
+				core.LimitSet{
+					Compile: m.EffectiveCompileLimits(),
+					Run:     m.ScaleRunLimits(problem.Limits),
+				})
+			_ = s.store.PutCachedVerdict(ctx, key, res)
 		}
-		_ = s.store.PutCachedVerdict(ctx, key, res)
 	}
 
 	// 2. Leaderboard.

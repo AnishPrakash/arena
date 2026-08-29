@@ -9,9 +9,9 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/AnishPrakash/arena/internal/adapters/postgres"
 	"github.com/AnishPrakash/arena/internal/ports"
+	"github.com/go-chi/chi/v5"
 )
 
 var handleRe = regexp.MustCompile(`^[a-zA-Z0-9_]{3,24}$`)

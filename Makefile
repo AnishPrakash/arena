@@ -88,3 +88,9 @@ load: ## k6 burst test
 .PHONY: clean
 clean:
 	rm -rf bin dist
+
+.PHONY: stack
+stack: images up ## Build language images, bring the stack up, and smoke test
+	@echo "waiting for services..."
+	@sleep 15
+	@$(MAKE) smoke

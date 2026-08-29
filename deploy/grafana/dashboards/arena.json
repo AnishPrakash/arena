@@ -1,0 +1,37 @@
+{
+  "title": "Arena — Judge",
+  "uid": "arena-judge",
+  "refresh": "5s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    { "type": "timeseries", "title": "Queue depth (backlog vs in-flight)",
+      "gridPos": {"h":8,"w":12,"x":0,"y":0},
+      "targets": [
+        {"expr":"arena_queue_backlog","legendFormat":"waiting"},
+        {"expr":"arena_queue_pending","legendFormat":"in flight"}]},
+    { "type": "timeseries", "title": "API p50/p95/p99 (must stay flat under load)",
+      "gridPos": {"h":8,"w":12,"x":12,"y":0},
+      "targets": [
+        {"expr":"histogram_quantile(0.50, sum(rate(arena_http_request_duration_seconds_bucket[1m])) by (le))","legendFormat":"p50"},
+        {"expr":"histogram_quantile(0.95, sum(rate(arena_http_request_duration_seconds_bucket[1m])) by (le))","legendFormat":"p95"},
+        {"expr":"histogram_quantile(0.99, sum(rate(arena_http_request_duration_seconds_bucket[1m])) by (le))","legendFormat":"p99"}]},
+    { "type": "timeseries", "title": "Verdict mix",
+      "gridPos": {"h":8,"w":12,"x":0,"y":8},
+      "targets": [{"expr":"sum by (verdict) (rate(arena_verdicts_total[1m]))","legendFormat":"{{verdict}}"}]},
+    { "type": "timeseries", "title": "Queue wait p95 (participant-visible latency)",
+      "gridPos": {"h":8,"w":12,"x":12,"y":8},
+      "targets": [{"expr":"histogram_quantile(0.95, sum(rate(arena_queue_wait_seconds_bucket[1m])) by (le))"}]},
+    { "type": "stat", "title": "OOM kills",
+      "gridPos": {"h":5,"w":6,"x":0,"y":16},
+      "targets": [{"expr":"arena_oom_kills_total"}]},
+    { "type": "stat", "title": "Wall-clock kills",
+      "gridPos": {"h":5,"w":6,"x":6,"y":16},
+      "targets": [{"expr":"arena_wall_kills_total"}]},
+    { "type": "stat", "title": "Lease reclaims (preemptions survived)",
+      "gridPos": {"h":5,"w":6,"x":12,"y":16},
+      "targets": [{"expr":"arena_lease_reclaims_total"}]},
+    { "type": "stat", "title": "Verdict cache hits (work avoided)",
+      "gridPos": {"h":5,"w":6,"x":18,"y":16},
+      "targets": [{"expr":"arena_verdict_cache_hits_total"}]}
+  ]
+}

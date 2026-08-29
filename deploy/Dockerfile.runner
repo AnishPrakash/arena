@@ -1,0 +1,16 @@
+# file: deploy/Dockerfile.runner
+FROM golang:1.25-alpine AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN mkdir -p internal/langs/builtin && cp languages/*.yaml internal/langs/builtin/
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" -o /out/runner ./cmd/runner
+
+# The runner needs the docker CLI, so it cannot be distroless.
+FROM alpine:3.19
+RUN apk add --no-cache docker-cli ca-certificates
+COPY --from=build /out/runner /app/runner
+COPY deploy/runner-entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+ENTRYPOINT ["/app/entrypoint.sh"]

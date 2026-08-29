@@ -1,0 +1,149 @@
+# file: deploy/docker-compose.yml
+name: arena
+
+x-common-env: &common-env
+  ARENA_ENV: dev
+  ARENA_LOG_LEVEL: info
+  ARENA_PG_DSN: postgres://arena:arena@postgres:5432/arena?sslmode=disable
+  ARENA_REDIS_ADDR: redis:6379
+  ARENA_JWT_SECRET: dev-secret-change-me-in-production-32-bytes
+  ARENA_RUNNER_TOKEN: dev-runner-token-change-me
+  ARENA_STREAM: judge.jobs
+  ARENA_GROUP: judges
+  ARENA_LEASE_TTL: 90s
+  ARENA_MAX_ATTEMPTS: "3"
+  # Path identity: the SAME absolute path on the host, in the runner, and in the sandbox.
+  ARENA_BLOB_ROOT: /var/tmp/arena-blobs
+  ARENA_BOX_ROOT: /var/tmp/arena-boxes
+  # Dev/demo stack: the smoke test fires 11 submissions back to back and the documented
+  # production default of 12/min would reject the tail of them. Still low enough that a
+  # 30-request loop demonstrates 429s on camera. .env.example keeps the prod value.
+  ARENA_RL_SUBMIT_PER_MIN: "60"
+  ARENA_RL_BURST: "20"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: arena
+      POSTGRES_PASSWORD: arena
+      POSTGRES_DB: arena
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arena -d arena"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    # Tuned for a contest read/write mix on a small box. Defaults assume 128 MB shared
+    # buffers on a machine from 2005.
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c max_connections=200
+      -c work_mem=8MB
+      -c effective_cache_size=768MB
+      -c random_page_cost=1.1
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    volumes: ["redisdata:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    # appendonly makes the queue survive a Redis restart. The leaderboard can be rebuilt
+    # from Postgres, but an unacked job that vanishes is a submission nobody ever answers.
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy noeviction
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    environment:
+      <<: *common-env
+      ARENA_HTTP_ADDR: ":8080"
+    ports: ["8080:8080"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    volumes:
+      - /var/tmp/arena-blobs:/var/tmp/arena-blobs
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  seed:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    # entrypoint, not command: Dockerfile.api sets ENTRYPOINT ["/app/api"], so a
+    # `command:` here would be appended as an ARGUMENT to the api binary and start
+    # the server instead of the seeder.
+    entrypoint: ["/app/seed"]
+    environment: *common-env
+    depends_on:
+      api: { condition: service_healthy }
+    volumes:
+      - /var/tmp/arena-blobs:/var/tmp/arena-blobs
+    restart: "no"
+
+  runner:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.runner
+    environment:
+      <<: *common-env
+      ARENA_API_BASE: http://api:8080
+      ARENA_SANDBOX: docker
+      # Slots = dedicated cores. Raising this above the core count destroys timing
+      # determinism, which is the property the brief explicitly asks for.
+      ARENA_RUNNER_SLOTS: "2"
+      ARENA_CPUSET_BASE: "1"
+    depends_on:
+      api: { condition: service_healthy }
+    volumes:
+      # Sibling containers, not nested: the runner drives the HOST daemon.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Path identity — see 7.1. These MUST be identical on both sides.
+      - /var/tmp/arena-boxes:/var/tmp/arena-boxes
+      - /var/tmp/arena-blobs:/var/tmp/arena-blobs
+    # ARENA_RUNNER_ID must be unique per replica; the entrypoint derives it from the
+    # container hostname so `docker compose up --scale runner=4` just works.
+    deploy:
+      replicas: 2
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports: ["9090:9090"]
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    ports: ["3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on: [prometheus]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:

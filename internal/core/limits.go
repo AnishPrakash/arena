@@ -51,7 +51,12 @@ type LimitSet struct {
 func DefaultCompileLimits() Limits {
 	return Limits{
 		CPUms: 10_000, WallMs: 20_000, MemMB: 512,
-		StdoutKB: 64, Pids: 128, StackMB: 64, OpenFiles: 256,
+		// 64 MiB, NOT the tight run-step cap. RLIMIT_FSIZE bounds every file the process
+		// writes, not just stdout — so a 64 KiB limit kills the linker with SIGXFSZ while
+		// it is writing the output binary ("ld terminated with signal 25"). It still has
+		// to be bounded: /box is a host bind mount with no size cap of its own, so this is
+		// the only disk-fill guard during compilation.
+		StdoutKB: 65_536, Pids: 128, StackMB: 64, OpenFiles: 256,
 	}
 }
 

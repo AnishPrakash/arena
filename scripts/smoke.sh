@@ -39,7 +39,7 @@ expect() {
   local name="$1" want="$2" lang="$3" src="$4"
   local id; id=$(submit "$lang" "$src")
   local got="" status=""
-  for i in $(seq 1 45); do
+  for i in $(seq 1 ${POLL_SECS:-45}); do
     local body; body=$(curl -s "$API/v1/submissions/$id" -H "Authorization: Bearer $TOKEN")
     status=$(echo "$body" | jq -r .status)
     got=$(echo "$body" | jq -r .verdict)

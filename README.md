@@ -285,10 +285,22 @@ byte-identically. CI tags images by commit SHA, so a recorded digest always reso
 
 **Measured** (`scripts/determinism.sh`, N = 20 identical submissions):
 
-| Configuration | Mean CPU | Std dev | CV |
-|---|---|---|---|
-| 1 slot per dedicated core (shipped default) | `<TBD>` ms | `<TBD>` ms | **`<TBD>`%** |
-| 4 slots per core (oversubscribed) | `<TBD>` ms | `<TBD>` ms | `<TBD>`% |
+| Configuration | Samples | Mean CPU | Std dev | CV |
+|---|---|---|---|---|
+| 9 slots on 10 cores, one slot per dedicated core (shipped default) | 20 | 330.1 ms | 29.80 ms | **9.03%** |
+
+Measured on the 10-core development machine with the queue drained, so nothing else was
+competing for cores. Samples that do not reach `DONE` are discarded loudly rather than
+recorded as `0` — an earlier version averaged timeouts in as zeros and reported a
+meaningless 139% CV.
+
+**The oversubscribed comparison could not be run, and the reason is the more interesting
+result.** Arena pins each judging slot to a specific core (`slot + ARENA_CPUSET_BASE`), so
+requesting 36 slots on a 10-core host asks Docker for core 36, the container is refused, and
+the submission fails as `IE`. Oversubscription is therefore not a configuration change in
+this system — it would require removing core pinning altogether, which is exactly the
+property being measured. The 2–4x throughput that oversubscription offers is unavailable by
+construction, not by policy.
 
 > **Methodology note.** The first run of this harness reported a coefficient of variation of
 > exactly **0.00%** — not determinism, but the verdict cache replaying a single stored result

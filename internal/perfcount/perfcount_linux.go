@@ -18,7 +18,7 @@ import (
 const (
 	sysPerfEventOpen = 298 // amd64
 
-	typeHardware       = 0
+	typeHardware        = 0
 	countHWInstructions = 1
 
 	// perf_event_attr bit flags, in struct bit order.

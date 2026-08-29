@@ -162,7 +162,7 @@ func bigInput(n int) string {
 
 func bigExpected() string {
 	n := 200000
-	best, cur := int64(-1 << 62), int64(0)
+	best, cur := int64(-1<<62), int64(0)
 	for i := 0; i < n; i++ {
 		v := int64((i*7919)%2001 - 1000)
 		if cur < 0 {

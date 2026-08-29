@@ -12,10 +12,10 @@ import (
 // THIS IS THE EXTENSION POINT. Adding Rust, Go, Kotlin or Haskell is one YAML file in
 // languages/ plus one Dockerfile in images/. No Go source changes anywhere.
 type Manifest struct {
-	ID          string `yaml:"id"          json:"id"`
-	Display     string `yaml:"display"     json:"display"`
-	Image       string `yaml:"image"       json:"image"`
-	SourceFile  string `yaml:"source_file" json:"source_file"`
+	ID         string `yaml:"id"          json:"id"`
+	Display    string `yaml:"display"     json:"display"`
+	Image      string `yaml:"image"       json:"image"`
+	SourceFile string `yaml:"source_file" json:"source_file"`
 
 	// Compile is empty for interpreted languages.
 	Compile []string `yaml:"compile" json:"compile,omitempty"`
@@ -24,8 +24,8 @@ type Manifest struct {
 	// TimeMultiplier and MemoryOverheadMB neutralise the fixed startup tax of interpreted
 	// and JIT runtimes so that an identical algorithm gets an identical verdict across
 	// languages. Data, not code — see core.Limits.Scale.
-	TimeMultiplier  float64 `yaml:"time_multiplier"    json:"time_multiplier"`
-	MemoryOverheadMB int64  `yaml:"memory_overhead_mb" json:"memory_overhead_mb"`
+	TimeMultiplier   float64 `yaml:"time_multiplier"    json:"time_multiplier"`
+	MemoryOverheadMB int64   `yaml:"memory_overhead_mb" json:"memory_overhead_mb"`
 
 	// CompileLimits optionally overrides the platform default (e.g. Java needs more).
 	CompileLimits *core.Limits `yaml:"compile_limits,omitempty" json:"-"`

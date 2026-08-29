@@ -132,3 +132,13 @@ cases:
       the program tries to kill PID 1 (boxrun) to escape measurement. It runs as uid 65534
       with cap-drop=ALL, so it cannot signal a process it does not own, and the container
       dies with its init anyway.
+  # ---------- efficiency is matched ----------
+  - name: quadratic-on-large-input
+    file: tle_quadratic.py
+    lang: python312
+    problem_override: max-subarray
+    expect: TLE
+    why: >
+      a CORRECT but O(n^2) solution, run against a SECOND problem. It passes tests 0 and 1
+      and then meets a 200,000-element input against a 1000 ms CPU limit. This case found a
+      cache-poisoning bug that no single-problem fixture could see.

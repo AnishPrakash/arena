@@ -14,3 +14,4 @@ node_modules/
 .vscode/
 coverage.*
 __debug_bin*
+__pycache__/

@@ -704,6 +704,12 @@ hostname, the same identity used as the Redis consumer name.
   in-flight execution.
 - **Bad:** stale directories accumulate if a runner dies without cleanup. Swept at runner
   startup alongside orphaned containers (`SweepStale`).
+- **A second bug of the same family, found later:** the box's `input` file is a hard link
+  to the node's cached test data. A stale link surviving from a previous submission made the
+  copy fallback write *through* it, poisoning another problem's cached input permanently —
+  because the cache is only populated on a miss. Every subsequent submission to that problem
+  was judged against the wrong input and returned a completely plausible `WA`. Shared mutable
+  state between submissions is where this system's real bugs live.
 - **Lesson worth recording:** this bug was invisible to unit tests, invisible to a
   single-runner smoke test, and only appeared as *flaky verdicts* under the golden suite
   with two replicas. It is the strongest argument in this project for testing the judge

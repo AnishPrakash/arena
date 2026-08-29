@@ -516,13 +516,14 @@ socket-equals-root property entirely.
 
 ## 11. Testing — judging the judge
 
-`testdata/golden/` holds **19 fixture programs whose correct verdict is known in advance**,
-run in CI on every push against a live stack. **Current result: 18/19.**
+`testdata/golden/` holds **18 fixture programs whose correct verdict is known in advance**,
+run in CI on every push against a live stack. **Current result: 18/18.**
 
 | Category | Cases |
 |---|---|
 | Correctness | AC in Python and C++, WA |
 | Limits | busy loop (`RLIMIT_CPU`), **`sleep(600)`** (wall clock only — the case a single-timeout judge gets wrong), O(n²) on large input, one-shot allocation, **gradual leak** (proves swap is disabled), div-by-zero, segfault, stack overflow, output flood, compile error |
+| Efficiency | a correct but O(n²) solution against a **second problem** with a 200,000-element input — the brief's "efficiency is matched" requirement, and the case that found the cache bug below |
 | Adversarial | fork bomb, outbound network, host-secret reads, rootfs write, box fill, and an attempt to `SIGKILL` the supervisor — each asserted contained, never `AC` |
 
 Plus table-driven unit tests on verdict precedence and limit arithmetic, an integration test
@@ -616,6 +617,7 @@ written and reviewed; they are not running.
 | The seeder could not write blobs on the VM | `mkdir /var/tmp/arena-blobs/testdata: permission denied` | Docker creates a missing bind-mount source as root, and the API image runs non-root | the blob root is created world-writable in `bootstrap-vm.sh` |
 | Runner exited with `exec format error` | container restart-looped immediately | shell scripts committed with CRLF line endings from Windows | `.gitattributes` pinning `*.sh text eol=lf` |
 | Reclaimed jobs failed as `IE` | after a runner was SIGKILLed | the orphaned sandbox container still held the name the retry wanted | containers labelled `arena.runner=<id>`, removed before create, swept at startup |
+| **A second problem was judged against the first problem's input** | plausible-looking `WA` on every max-subarray submission, forever, on that node | the box's `input` is a **hard link** to the node's cached test data. A stale link left by a previous submission made the `copyFile` fallback truncate and write *through* it into another problem's cached input — and `testdata()` only fetches on a cache miss, so the poisoned file was never repaired | `os.Remove(boxIn)` before linking, and the poisoned cache purged. Found by adding one golden fixture that used a second problem |
 | The reconciler re-enqueued forever | a stuck submission cycled indefinitely | the attempt counter was incremented in memory but never persisted | `BumpAttempt` writes it before re-publishing; past `MAX_ATTEMPTS` the submission fails honestly as `IE` |
 
 **The pattern worth noticing:** almost every one of these was found by a test or by deploying
@@ -725,10 +727,6 @@ Being explicit about scope is part of the design.
   List rather than draining it. Under sustained load the PEL was observed at **5,822 entries
   against a 702-job backlog**. Nothing is lost — heartbeats renew the leases and reclaim
   recovers them — but it widens the redelivery window after an ungraceful kill.
-- **One golden fixture fails (18/19).** `quadratic-on-large-input` declares a
-  `problem_override` for the time limit that the runner does not honour, so the case is judged
-  against the default envelope. The fixture is wrong, not the judge — but it is failing, and it
-  is counted as failing.
 - **Leaderboard entries carry an empty `handle`.** Ranking and scoring are correct; the display
   name is not joined in. Cosmetic, unfixed.
 - **Instruction counting is unavailable on every target tried** (§5, ADR-009).

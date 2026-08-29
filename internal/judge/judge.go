@@ -171,6 +171,13 @@ func (j *Judge) runOne(ctx context.Context, job core.JobSpec, m *langs.Manifest,
 	// back to a copy across devices. A 50 MB input copied 12 times per submission is real
 	// disk bandwidth on a busy node.
 	boxIn := filepath.Join(boxDir, "input")
+	// Remove any surviving entry FIRST. boxIn is a hard link to the node's cached test
+	// data, so if a stale one is left over from a previous submission, the copyFile
+	// fallback below truncates and writes through it - corrupting the cached input of
+	// whichever problem that link pointed at. testdata() only fetches on a cache MISS,
+	// so a poisoned file is never repaired: every later submission to that problem is
+	// judged against another problem's input, and reported as a plain WA.
+	_ = os.Remove(boxIn)
 	if err := os.Link(inPath, boxIn); err != nil {
 		if err := copyFile(inPath, boxIn); err != nil {
 			return core.TestResult{}, err

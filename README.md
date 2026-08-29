@@ -729,6 +729,12 @@ Being explicit about scope is part of the design.
   recovers them — but it widens the redelivery window after an ungraceful kill.
 - **Leaderboard entries carry an empty `handle`.** Ranking and scoring are correct; the display
   name is not joined in. Cosmetic, unfixed.
+- **The database password is the default, not the generated one.** `POSTGRES_PASSWORD` is
+  generated into `.env`, but `deploy/docker-compose.yml` hardcodes `ARENA_PG_DSN` and the
+  Postgres credentials, so the generated value is never used. Postgres is bound to loopback
+  and firewalled, so it is not reachable off-host — but the secret-generation step is
+  misleading until the DSN reads from the environment. That is a one-line change plus a
+  volume recreate, which is not a safe operation on a live demo instance.
 - **Instruction counting is unavailable on every target tried** (§5, ADR-009).
 
 ---

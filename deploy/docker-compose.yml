@@ -29,7 +29,7 @@ services:
       POSTGRES_USER: arena
       POSTGRES_PASSWORD: arena
       POSTGRES_DB: arena
-    ports: ["5432:5432"]
+    ports: ["127.0.0.1:5432:5432"]   # loopback only; never reachable off-host
     volumes: ["pgdata:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U arena -d arena"]
@@ -49,7 +49,7 @@ services:
   redis:
     restart: unless-stopped
     image: redis:7-alpine
-    ports: ["6379:6379"]
+    ports: ["127.0.0.1:6379:6379"]   # loopback only; never reachable off-host
     volumes: ["redisdata:/data"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -131,14 +131,14 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
-    ports: ["9090:9090"]
+    ports: ["127.0.0.1:9090:9090"]   # loopback only; never reachable off-host
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     restart: unless-stopped
 
   grafana:
     image: grafana/grafana:latest
-    ports: ["3000:3000"]
+    ports: ["127.0.0.1:3000:3000"]   # loopback only; never reachable off-host
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_AUTH_ANONYMOUS_ENABLED: "true"

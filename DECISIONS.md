@@ -1,5 +1,9 @@
 # Architecture Decision Records — Arena
 
+Format: **Context → Decision → Alternatives rejected → Consequences (including the bad
+ones).** An ADR that lists no downside is marketing, not engineering.
+
+Companion to [`README.md`](./README.md).
 
 ---
 
@@ -536,6 +540,9 @@ you get CFS shares.
 
 - **Good:** the property the brief explicitly asks for, with a number attached rather than
   an assertion.
+- **Bad:** the slot-to-core mapping is computed, not validated. See ADR-019 — on a host with
+  fewer cores than `replicas × slots + base`, every sandbox creation fails. Determinism by
+  pinning is only as good as the pinning arithmetic.
 - **Bad:** roughly 2–4× more nodes for the same throughput. Absorbed by spot instances,
   where the cost difference is cents per contest — the trade is bought back by ADR-003's
   lease semantics.
@@ -704,7 +711,57 @@ hostname, the same identity used as the Redis consumer name.
 
 ---
 
-## ADR-019 — Deliberate scope cuts
+## ADR-019 — The demo runs on one small VM, sized by the determinism rule
+
+**Status:** Accepted · **Date:** 2026-08-29
+
+### Context
+
+The submission needs a deployed instance a judge can open. The obvious instinct is to find
+the biggest free machine available, and the obvious frustration is that free tiers cap out
+at two shared vCPUs.
+
+### Decision
+
+Deploy a single Google Compute Engine `e2-standard-2` (2 vCPU, 8 GB, `asia-south1`,
+Ubuntu 24.04) on the free trial, running the same `docker compose` stack as development,
+with `ARENA_RUNNER_SLOTS=1` and one runner replica. Report throughput and determinism
+figures measured on the 10-core development machine, labelled as such.
+
+### Alternatives rejected
+
+- **GCP Always Free `e2-micro`.** The blocker is **1 GB of RAM**, not the shared cores.
+  Postgres, Redis, the API, a runner, Prometheus and Grafana plus a 256 MB sandbox do not
+  fit. The instinct to count cores was the wrong instinct.
+- **Cloud Run / Render / Railway / Fly Machines.** No Docker socket, no cgroup control, no
+  `--pids-limit`. Arena's entire isolation story depends on capabilities these do not expose.
+- **Oracle Cloud Always Free (4 ARM cores, 24 GB).** Genuinely fits and is free permanently.
+  Rejected on schedule: it needs an ARM64 rebuild of every language image, and A1 capacity is
+  frequently unavailable in popular regions.
+- **A bigger trial VM.** `e2-standard-4` was affordable against the credit but buys only more
+  judging slots, which is a throughput parameter, not a correctness one.
+
+### Consequences
+
+- **Good:** the deployment is honest. Arena's determinism rule is `slots ≤ cores − 1`; it
+  says nothing about how many cores exist. A 2-core host running one judging slot enforces
+  every limit and produces every verdict correctly — it simply judges one submission at a
+  time.
+- **Good:** ~$5 for a three-day evaluation window, drawn from the trial credit, with the
+  designed contest-scale economics reported separately.
+- **Bad:** throughput on the demo host is not representative, so two sets of numbers have to
+  be presented and clearly distinguished. Conflating them would be the dishonest shortcut.
+- **Bad, and this one was expensive:** deploying to a smaller machine exposed that cpuset
+  pinning is computed as `slot + ARENA_CPUSET_BASE` and **never validated against the host's
+  core count**. Two runner replicas on a 2-core host requested core index 2; Docker refused
+  the container with `Requested CPUs are not available`, and six of eleven smoke cases failed
+  as `IE`. The system's response was correct — it refused to guess a verdict — but the right
+  fix is a startup guard against `runtime.NumCPU()` that refuses to boot rather than failing
+  per submission. Recorded as a known gap in README §17.
+
+---
+
+## ADR-020 — Deliberate scope cuts
 
 **Status:** Accepted · Recorded so the omissions read as decisions, not gaps
 

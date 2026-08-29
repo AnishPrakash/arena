@@ -57,6 +57,7 @@ jobs:
       - name: Bring up the stack
         run: |
           cp .env.example .env
+          sudo mkdir -p /var/tmp/arena-blobs && sudo chmod 0777 /var/tmp/arena-blobs
           make images
           docker compose -f deploy/docker-compose.yml up -d
           for i in $(seq 1 60); do

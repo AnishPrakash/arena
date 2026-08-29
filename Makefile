@@ -50,6 +50,8 @@ fmt: ## Format
 
 .PHONY: up
 up: ## Start the full stack
+	mkdir -p /var/tmp/arena-blobs 2>/dev/null || sudo mkdir -p /var/tmp/arena-blobs
+	chmod 0777 /var/tmp/arena-blobs 2>/dev/null || sudo chmod 0777 /var/tmp/arena-blobs
 	docker compose -f deploy/docker-compose.yml up -d --build
 
 .PHONY: down

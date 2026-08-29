@@ -23,6 +23,7 @@ x-common-env: &common-env
 
 services:
   postgres:
+    restart: unless-stopped
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: arena
@@ -46,6 +47,7 @@ services:
       -c random_page_cost=1.1
 
   redis:
+    restart: unless-stopped
     image: redis:7-alpine
     ports: ["6379:6379"]
     volumes: ["redisdata:/data"]
